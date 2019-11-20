@@ -1,0 +1,1 @@
+ImageCLEF-DA dataset directory
