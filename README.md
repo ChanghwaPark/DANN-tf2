@@ -14,11 +14,11 @@ ImageCLEF-DA [Download](https://drive.google.com/file/d/0B9kJH0-rJ2uRS3JILThaQXJ
 ```
 Office-31
 
-python main.py --gpu (gpu id) --dataset office --source amazon --target webcam --network resnet --logdir (log directory) --datadir (dataset directory) --dw 1e-2
+python main.py --gpu (gpu id) --dataset office --source amazon --target webcam --network resnet --logdir (log directory) --datadir (datasets parent directory) --dw 1e-2
 ```
 
 ```
 ImageCLEF-DA
 
-python main.py --gpu (gpu id) --dataset image-clef --source i --target p --network resnet --logdir (log directory) --datadir (dataset directory) --dw 1e-2
+python main.py --gpu (gpu id) --dataset image-clef --source i --target p --network resnet --logdir (log directory) --datadir (datasets parent directory) --dw 1e-2
 ```
