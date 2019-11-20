@@ -3,6 +3,7 @@ Tensorflow 2.0 implementation of Domain Adversarial Neural Networks (DANN)
 
 ## Environment
 Python 3.7
+
 Tensorflow 2.0
 
 ## Dataset
