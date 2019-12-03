@@ -35,6 +35,7 @@ flags.DEFINE_float('wd', 5e-4, 'Weight decay hyper-parameter')
 flags.DEFINE_float('dw', 1e-2, 'Adversarial domain adaptation hyper-parameter')
 flags.DEFINE_integer('trim', 0, 'Feature layer selection')
 flags.DEFINE_integer('differ_gradients', 1, 'Differentiation on the dense layer gradients')
+flags.DEFINE_boolean('debug', False, 'Debug mode flag')
 
 logging.set_verbosity(logging.INFO)
 
@@ -68,6 +69,10 @@ def main(_):
     os.mkdir(model_dir)
     print(colored(f"Model name: {model_name}", 'blue'))
 
+    # Debug mode
+    if FLAGS.debug:
+        tf.config.experimental_run_functions_eagerly(True)
+        
     # Prepare dataset
     s_train_ds, t_train_ds, t_test_ds = prepare_dataset(FLAGS)
 
