@@ -81,7 +81,7 @@ def train_step(FLAGS, s_images, s_labels, t_images, classifier, discriminator,
         tf.summary.scalar('loss_s_class', train_loss_s_class.result(), step=main_optimizer.iterations)
         tf.summary.scalar('loss_dann', train_loss_dann.result(), step=main_optimizer.iterations)
         tf.summary.scalar('s_train_accuracy', s_train_accuracy.result(), step=main_optimizer.iterations)
-        if main_optimizer.iterations % FLAGS.steps !=0:
+        if main_optimizer.iterations % FLAGS.steps != 0:
             train_loss_disc.reset_states()
             train_loss_main.reset_states()
             train_loss_s_class.reset_states()

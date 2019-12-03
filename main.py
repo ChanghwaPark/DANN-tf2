@@ -9,7 +9,6 @@ import tensorflow as tf
 from absl import app, flags, logging
 from pytz import timezone
 from termcolor import colored
-from tqdm import tqdm
 
 import network
 from dataset import prepare_dataset, get_num_classes

@@ -17,9 +17,9 @@ class Classifier(Model):
 
     def call(self, x, training, trim=0):
         feature = self.feature_extractor(x, training=training)
-        if trim==1:
+        if trim == 1:
             return self.label_predictor(feature, training=training), feature
-        elif trim==0:
+        elif trim == 0:
             feature = self.label_predictor(feature, training=training)
             return feature, feature
         else:
