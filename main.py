@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 import network
 from dataset import prepare_dataset, get_num_classes
-from train import train_step, test_step
+from train import train_epoch, test_epoch
 from utils import delete_existing, dann_scheduler
 
 ETA_FREQUENCY = 5
@@ -27,8 +27,7 @@ flags.DEFINE_string('network', 'resnet', 'Network architecture')
 flags.DEFINE_string('logdir', 'results/logs', 'Logfile directory')
 flags.DEFINE_string('datadir', 'datasets', 'Directory for datasets')
 flags.DEFINE_float('lr', 1e-3, 'Learning rate')
-flags.DEFINE_float('lr_decay', 1.0, 'Learning rate decay per epoch')
-flags.DEFINE_integer('bs', 36, 'Batch size')
+flags.DEFINE_integer('bs', 64, 'Batch size')
 flags.DEFINE_integer('steps', 500, 'Number of steps per epoch')
 flags.DEFINE_integer('epochs', 200, 'Number of epochs')
 flags.DEFINE_float('wd', 5e-4, 'Weight decay hyper-parameter')
@@ -45,11 +44,6 @@ def main(_):
     pprint(FLAGS.flag_values_dict())
 
     # Define GPU configuration
-    # gpus = tf.config.experimental.list_physical_devices('GPU')
-    # tf.config.experimental.set_visible_devices(gpus[FLAGS.gpu], 'GPU')
-    # tf.config.experimental.set_memory_growth(gpus[FLAGS.gpu], True)
-    # gpu_config = tf.compat.v1.ConfigProto()
-    # gpu_config.gpu_options.allow_growth = True
     os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
     os.environ['CUDA_VISIBLE_DEVICES'] = FLAGS.gpu
 
@@ -59,7 +53,6 @@ def main(_):
         FLAGS.target,
         FLAGS.network,
         f"dw_{FLAGS.dw}",
-        f"lrd_{FLAGS.lr_decay}",
         f"trim_{FLAGS.trim}",
         f"dg_{FLAGS.differ_gradients}"
     ]
@@ -72,17 +65,11 @@ def main(_):
     # Debug mode
     if FLAGS.debug:
         tf.config.experimental_run_functions_eagerly(True)
-        
-    # Prepare dataset
-    s_train_ds, t_train_ds, t_test_ds = prepare_dataset(FLAGS)
-
-    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(FLAGS.lr, decay_steps=FLAGS.steps,
-                                                                 decay_rate=FLAGS.lr_decay, staircase=False)
 
     classifier = network.Classifier(network=FLAGS.network, num_classes=get_num_classes(FLAGS.dataset))
     discriminator = network.Discriminator()
-    disc_optimizer = tf.keras.optimizers.SGD(learning_rate=lr_schedule, momentum=0.9, nesterov=True)
-    main_optimizer = tf.keras.optimizers.SGD(learning_rate=lr_schedule, momentum=0.9, nesterov=True)
+    disc_optimizer = tf.keras.optimizers.SGD(learning_rate=FLAGS.lr, momentum=0.9, nesterov=True)
+    main_optimizer = tf.keras.optimizers.SGD(learning_rate=FLAGS.lr, momentum=0.9, nesterov=True)
 
     train_loss_disc = tf.keras.metrics.Mean(name='train_loss_disc')
     train_loss_main = tf.keras.metrics.Mean(name='train_loss_main')
@@ -100,27 +87,15 @@ def main(_):
 
     with summary_writer.as_default():
         for epoch in range(FLAGS.epochs):
+            # Prepare dataset
+            s_train_ds, t_train_ds, t_test_ds = prepare_dataset(FLAGS)
             dann_schedule = dann_scheduler(epoch / FLAGS.epochs)
 
-            s_train_it = iter(s_train_ds)
-            t_train_it = iter(t_train_ds)
+            train_epoch(FLAGS, s_train_ds, t_train_ds, classifier, discriminator, main_optimizer, disc_optimizer,
+                        dann_schedule, train_loss_main, train_loss_s_class, train_loss_dann, train_loss_disc,
+                        s_train_accuracy, summary_writer)
 
-            # Make a progress bar
-            steps = tqdm(range(FLAGS.steps), leave=False)
-
-            # Training
-            for _ in steps:
-                s_images, s_labels = next(s_train_it)
-                t_images = next(t_train_it)
-                train_step(s_images, t_images, s_labels, FLAGS, classifier, discriminator,
-                           disc_optimizer, main_optimizer,
-                           train_loss_disc, train_loss_main, train_loss_s_class, train_loss_dann,
-                           s_train_accuracy, dann_schedule)
-            steps.close()
-
-            # Testing
-            for test_images, test_labels in t_test_ds:
-                test_step(test_images, test_labels, classifier, t_test_accuracy)
+            test_epoch(t_test_ds, classifier, t_test_accuracy)
 
             tf.summary.scalar('t_test_accuracy', t_test_accuracy.result(), step=main_optimizer.iterations)
 
@@ -135,6 +110,11 @@ def main(_):
                                   t_test_accuracy.result().numpy() * 100))
 
             # Reset the metric for the next epoch
+            train_loss_main.reset_states()
+            train_loss_s_class.reset_states()
+            train_loss_dann.reset_states()
+            train_loss_disc.reset_states()
+            s_train_accuracy.reset_states()
             t_test_accuracy.reset_states()
 
             epoch_time.appendleft(time.time() - temp_time)

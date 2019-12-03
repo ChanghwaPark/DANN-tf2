@@ -1,4 +1,7 @@
 import tensorflow as tf
+from tqdm import tqdm
+
+from utils import lr_scheduler
 
 LOG_FREQUENCY = 10
 cce = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True)
@@ -6,9 +9,9 @@ bce = tf.keras.losses.BinaryCrossentropy()
 
 
 @tf.function
-def train_step(s_images, t_images, s_labels, FLAGS, classifier, discriminator,
-               disc_optimizer, main_optimizer,
-               train_loss_disc, train_loss_main, train_loss_s_class, train_loss_dann,
+def train_step(FLAGS, s_images, s_labels, t_images, classifier, discriminator,
+               main_optimizer, disc_optimizer,
+               train_loss_main, train_loss_s_class, train_loss_dann, train_loss_disc,
                s_train_accuracy, dann_schedule):
     with tf.GradientTape(persistent=True) as tape:
         dw = tf.constant(FLAGS.dw, dtype=tf.float32)
@@ -78,14 +81,45 @@ def train_step(s_images, t_images, s_labels, FLAGS, classifier, discriminator,
         tf.summary.scalar('loss_s_class', train_loss_s_class.result(), step=main_optimizer.iterations)
         tf.summary.scalar('loss_dann', train_loss_dann.result(), step=main_optimizer.iterations)
         tf.summary.scalar('s_train_accuracy', s_train_accuracy.result(), step=main_optimizer.iterations)
-        train_loss_disc.reset_states()
-        train_loss_main.reset_states()
-        train_loss_s_class.reset_states()
-        train_loss_dann.reset_states()
-        s_train_accuracy.reset_states()
+        if main_optimizer.iterations % FLAGS.steps !=0:
+            train_loss_disc.reset_states()
+            train_loss_main.reset_states()
+            train_loss_s_class.reset_states()
+            train_loss_dann.reset_states()
+            s_train_accuracy.reset_states()
+
+
+def train_epoch(FLAGS, s_train_ds, t_train_ds, classifier, discriminator, main_optimizer, disc_optimizer,
+                dann_schedule, train_loss_main, train_loss_s_class, train_loss_dann, train_loss_disc,
+                s_train_accuracy, summary_writer):
+    s_train_it = iter(s_train_ds)
+    t_train_it = iter(t_train_ds)
+
+    # Make a progress bar
+    steps = tqdm(range(FLAGS.steps), leave=False)
+
+    # Training
+    for _ in steps:
+        s_images, s_labels = next(s_train_it)
+        t_images = next(t_train_it)
+        current_lr = lr_scheduler(main_optimizer.iterations / (FLAGS.steps * FLAGS.epochs), FLAGS.lr)
+        tf.keras.backend.set_value(main_optimizer.lr, current_lr)
+        tf.keras.backend.set_value(disc_optimizer.lr, current_lr)
+        train_step(FLAGS, s_images, s_labels, t_images, classifier, discriminator,
+                   main_optimizer, disc_optimizer,
+                   train_loss_main, train_loss_s_class, train_loss_dann, train_loss_disc,
+                   s_train_accuracy, dann_schedule)
+        summary_writer.flush()
+    steps.close()
 
 
 @tf.function
 def test_step(t_images, t_labels, classifier, t_test_accuracy):
     t_predictions, _ = classifier(t_images, training=False)
     t_test_accuracy.update_state(t_labels, t_predictions)
+
+
+def test_epoch(t_test_ds, classifier, t_test_accuracy):
+    # Testing
+    for test_images, test_labels in t_test_ds:
+        test_step(test_images, test_labels, classifier, t_test_accuracy)
